@@ -7,9 +7,6 @@ from torch.utils.data import Subset, DataLoader
 from torchvision import models, transforms, datasets
 import torchvision.transforms.v2 as v2
 
-# from google.colab import drive
-# drive.mount('/content/drive')
-
 def main():
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -106,6 +103,7 @@ def main():
         with torch.no_grad():
             for x_val, y_val in val_loader:
                 x_val, y_val = x_val.to(device, non_blocking=True), y_val.to(device, non_blocking=True)
+
                 outputs = model(x_val)
                 loss = criterion(outputs, y_val)
                 val_loss += loss.item()
