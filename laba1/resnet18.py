@@ -29,7 +29,6 @@ def main():
         v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
 
-    # dataset_path = "/content/drive/MyDrive/simpsons_dataset"
     dataset_path = r"simpsons_dataset"
     temp_dataset = datasets.ImageFolder(root=dataset_path)
     train_idx, val_idx = train_test_split(
@@ -45,7 +44,7 @@ def main():
     train_dataset = Subset(train_dataset, train_idx)
     val_dataset = Subset(val_dataset, val_idx)
 
-    kwargs = {'num_workers': 2, 'persistent_workers':True, 'pin_memory': True} if device.type == 'cuda' else {}
+    kwargs = {'num_workers': 32, 'persistent_workers':True, 'pin_memory': True} if device.type == 'cuda' else {}
 
     train_loader = DataLoader(train_dataset, batch_size=128, shuffle=True, **kwargs)
     val_loader = DataLoader(val_dataset, batch_size=64, shuffle=False ,**kwargs)
@@ -74,7 +73,6 @@ def main():
     epochs = 30
     best_val_acc = 0
     patience_counter = 0
-    best_val_loss = float('inf')
 
     for epoch in range(epochs):
         model.train()
@@ -97,9 +95,6 @@ def main():
         correct = 0
         total = 0
 
-        # all_preds = []
-        # all_labels = []
-
         with torch.no_grad():
             for x_val, y_val in val_loader:
                 x_val, y_val = x_val.to(device, non_blocking=True), y_val.to(device, non_blocking=True)
@@ -108,13 +103,9 @@ def main():
                 loss = criterion(outputs, y_val)
                 val_loss += loss.item()
 
-                # Точность
                 predicted = outputs.argmax(dim=1)
                 total += x_val.size(0)
                 correct += (predicted == y_val).sum().item()
-
-                # all_preds.extend(predicted.numpy())
-                # all_labels.extend(y_val.numpy())
 
         val_loss /= len(val_loader)
         val_acc = 100 * correct / total
@@ -125,25 +116,21 @@ def main():
               f"Val Acc: {val_acc:.2f}% | "
               f"Best: {best_val_acc:.2f}%")
 
-        # ===== СОХРАНЕНИЕ ЛУЧШЕЙ МОДЕЛИ =====
-        if val_acc > best_val_acc and val_loss < (best_val_loss*1.05):
-            best_val_loss = val_loss
+        if val_acc > best_val_acc:
             best_val_acc = val_acc
             patience_counter = 0
             torch.save({
-                'epoch': epoch,
                 'model_state_dict': model.state_dict(),
-                'optimizer_state_dict': optimizer.state_dict(),
                 'val_acc': val_acc,
             }, 'best_model.pth')
-            print(f"  → Новая лучшая модель сохранена! (Точность: {val_acc:.2f}%)")
+            print(f"модель обновлена точность: {val_acc:.2f}%)")
         else:
             patience_counter += 1
             if patience_counter >= 5:
-                print(f"\nРанняя остановка на эпохе {epoch + 1}")
+                print(f"\nранняя остановка на эпохе {epoch + 1}")
                 break
 
-    print(f"\nЛучшая валидационная точность: {best_val_acc:.2f}%")
+    print(f"\nлучшая валидационная точность: {best_val_acc:.2f}%")
 
     checkpoint = torch.load('best_model.pth')
     model.load_state_dict(checkpoint['model_state_dict'])
