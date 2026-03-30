@@ -137,7 +137,7 @@ def create_model():
         in_channels=3,
         classes=1,
         activation=None,
-        decoder_attention_type="scse"
+        decoder_attention_type="attention"
     )
     model = model.to(device)
     model = torch.nn.DataParallel(model)
@@ -155,7 +155,7 @@ def create_model_for_inference():
         in_channels=3,
         classes=1,
         activation=None,
-        decoder_attention_type="scse"
+        decoder_attention_type="attention"
     )
     model = model.to(device)
     return model
