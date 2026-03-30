@@ -117,9 +117,9 @@ def calculate_dice(pred, target, threshold=0.5, smooth=1e-6):
 
 # %%
 def create_loaders():
-    train_dataset = SegDataset("train", "train_labels", transform=train_transform)
-    val_dataset = SegDataset("val", "val_labels", transform=test_transform)
-    test_dataset = SegDataset("test", "test_labels", transform=test_transform)
+    train_dataset = SegDataset("tiff/train", "tiff/train_labels", transform=train_transform)
+    val_dataset = SegDataset("tiff/val", "tiff/val_labels", transform=test_transform)
+    test_dataset = SegDataset("tiff/test", "tiff/test_labels", transform=test_transform)
 
     train_loader = DataLoader(dataset=train_dataset, batch_size=8, shuffle=True, num_workers=4, pin_memory=True,
                               persistent_workers=True)
