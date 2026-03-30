@@ -132,7 +132,7 @@ def create_loaders():
 
 def create_model():
     model = smp.UnetPlusPlus(
-        encoder_name="efficientnet-b3",
+        encoder_name="resnet50",
         encoder_weights="imagenet",
         in_channels=3,
         classes=1,
@@ -150,7 +150,7 @@ def create_model():
 
 def create_model_for_inference():
     model = UnetPlusPlus(
-        encoder_name="efficientnet-b3",
+        encoder_name="resnet50",
         encoder_weights="imagenet",
         in_channels=3,
         classes=1,
