@@ -96,6 +96,7 @@ def train_yolov8(data_yaml: str, epochs: int = 50, batch: int = 16, imgsz: int =
         imgsz=imgsz,
         batch=batch,
         device=device,
+        cache=False,
         optimizer="SGD",
         lr0=0.01,
         lrf=0.01,
