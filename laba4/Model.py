@@ -3,6 +3,7 @@ import numpy as np
 class Model:
     def __init__(self):
         self.layers=[]
+        self.training = True
 
     def add(self, layer):
         self.layers.append(layer)
@@ -25,3 +26,15 @@ class Model:
 
     def __call__(self, x):
         return self.forward(x)
+
+    def train(self):
+        self.training = True
+        for layer in self.layers:
+            if hasattr(layer, 'train'):
+                layer.train()
+
+    def eval(self):
+        self.training = False
+        for layer in self.layers:
+            if hasattr(layer, 'eval'):
+                layer.eval()

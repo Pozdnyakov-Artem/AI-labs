@@ -12,6 +12,19 @@ import torchvision
 from torchvision.datasets import CIFAR10
 import numpy as np
 
+def augment_image(x, flip_prob=0.6, pad=4):
+    if np.random.rand() > flip_prob:
+        x = np.flip(x, axis=-1).copy()
+
+    if np.random.rand() > 0.8 and pad > 0:
+        x_padded = np.pad(x, ((0, 0), (pad, pad), (pad, pad)), mode='reflect')
+        H, W = x.shape[1], x.shape[2]
+        h_start = np.random.randint(0, 2 * pad + 1)
+        w_start = np.random.randint(0, 2 * pad + 1)
+        x = x_padded[:, h_start:h_start + H, w_start:w_start + W].copy()
+
+    return x
+
 # train_dataset = torchvision.datasets.MNIST(
 #     root="./MNIST/train", train=True,
 #     transform=torchvision.transforms.ToTensor(),
@@ -21,24 +34,6 @@ import numpy as np
 #     root="./MNIST/test", train=False,
 #     transform=torchvision.transforms.ToTensor(),
 #     download=True)
-
-def augment_image(x, flip_prob=0.6, pad=4):
-    """
-    x: (C, H, W), normalized
-    """
-    # Random horizontal flip
-    if np.random.rand() > flip_prob:
-        x = np.flip(x, axis=-1).copy()
-
-    # Random padding + crop
-    if np.random.rand() > 0.8 and pad > 0:
-        x_padded = np.pad(x, ((0, 0), (pad, pad), (pad, pad)), mode='reflect')
-        H, W = x.shape[1], x.shape[2]
-        h_start = np.random.randint(0, 2 * pad + 1)
-        w_start = np.random.randint(0, 2 * pad + 1)
-        x = x_padded[:, h_start:h_start + H, w_start:w_start + W].copy()
-
-    return x
 
 cifar = CIFAR10(root="./data", train=True, download=True)
 X_small = np.array([
@@ -55,7 +50,7 @@ X_test = np.array([
     np.transpose(np.array(img).astype(np.float32) / 255.0, (2,0,1))
     for img, _ in cifar_test
 ])
-X_test = (X_small - mean) / std
+X_test = (X_test - mean) / std
 y_test = np.array([label for _, label in cifar_test])
 
 def split_dataset(X, y, val_ratio=0.1, random_state=42):
@@ -77,8 +72,7 @@ def split_dataset(X, y, val_ratio=0.1, random_state=42):
 # X_train_full = X_train_full[:, np.newaxis, :, :]
 # X_test = X_test[:, np.newaxis, :, :]
 
-(X_train, y_train), (X_val, y_val) = split_dataset(X_small, y_small, val_ratio=0.20)
-# (X_val, y_val), (X_test, y_test) = split_dataset(X_pr, y_pr, val_ratio=0.25)
+(X_train, y_train), (X_val, y_val) = split_dataset(X_small, y_small, val_ratio=0.2)
 # (X_train, y_train), (X_val, y_val) = split_dataset(X_train_full, y_train_full, val_ratio=0.15)
 
 class DataLoader:
@@ -98,16 +92,13 @@ class DataLoader:
             end = min(start + self.batch_size, self.n_samples)
             batch_idx = indices[start:end]
             X_batch = self.X[batch_idx]
-            if self.shuffle:  # простой признак training mode
+            if self.shuffle:
                 X_batch = np.array([augment_image(img) for img in X_batch])
             yield X_batch, self.y[batch_idx]
 
     def __len__(self):
         return (self.n_samples + self.batch_size - 1) // self.batch_size
 
-def accuracy(logits, labels):
-    predictions = np.argmax(logits, axis=1)
-    return np.mean(predictions == labels)
 
 model = Model()
 # model.add(Conv2D(1, 8,(3,3)))
@@ -124,7 +115,6 @@ model.add(MaxPool2d((2,2)))
 
 model.add(Conv2D(32, 64, (3,3), padding=1))
 model.add(Relu())
-# Убрали второй conv 64→64 — экономим параметры!
 model.add(MaxPool2d((2,2)))
 
 model.add(Flatten())
@@ -134,28 +124,11 @@ model.add(Relu())
 model.add(Dropout(0.3))
 model.add(Linear(128, 10))
 
-# model.add(Conv2D(3, 32, (3,3), padding=1))
-# model.add(Relu())
-# model.add(Conv2D(32, 32, (3,3), padding=1))  # второй conv, same channels
-# model.add(Relu())
-# model.add(MaxPool2d((2,2)))  # 32→16
-#
-# model.add(Conv2D(32, 64, (3,3), padding=1))  # третий conv, больше каналов
-# model.add(Relu())
-# model.add(Conv2D(64, 64, (3,3), padding=1))
-# model.add(Relu())
-# model.add(MaxPool2d((2,2)))  # 16→8
-#
-# model.add(Flatten())  # 64 * 8 * 8 = 4096
-# model.add(Linear(4096, 256))
-# model.add(Relu())
-# model.add(Linear(256, 10))
-#
 train_loader = DataLoader(X_train, y_train, batch_size=128, shuffle=True)
 val_loader = DataLoader(X_val, y_val, batch_size=64, shuffle=False)
 test_loader = DataLoader(X_test, y_test, batch_size=64)
 
-EPOCHS = 30
+EPOCHS = 15
 optimizer = AdamW(model.parameters(), lr=1e-3)
 scheduler = CosineAnnealingLR(optimizer, EPOCHS * len(train_loader))
 criterion = CrossEntropyLoss()
@@ -164,6 +137,7 @@ arr_of_train_loss = []
 arr_of_val_loss = []
 for epoch in range(EPOCHS):
     train_loss = 0
+    model.train()
     for x, labels in train_loader:
         optimizer.zero_grad()
         logits = model(x)
@@ -176,6 +150,7 @@ for epoch in range(EPOCHS):
     train_loss/=len(train_loader)
     arr_of_train_loss.append(train_loss)
 
+    model.eval()
     val_loss = 0
     val_correct = 0
     val_total = 0
@@ -193,7 +168,7 @@ for epoch in range(EPOCHS):
 
     print(f"Epoch {epoch + 1}/{EPOCHS} | " f"Train Loss: {train_loss:.4f} | " f"Val Loss: {val_loss:.4f} Acc: {val_acc:.4f}")
 
-
+model.eval()
 test_correct = 0
 test_total = 0
 for x, labels in test_loader:

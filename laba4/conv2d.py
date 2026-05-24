@@ -30,10 +30,7 @@ def im2col(x, kernel_size, stride=1, padding=0):
 # print(im2col(a,(3,3)))
 
 def col2im(dX_col, input_shape, kernel_size, stride=1, pad=0):
-    """
-    dX_col: (N, C_in*Kh*Kw, Hout*Wout) — batched формат
-    input_shape: (N, C_in, H, W) — оригинальная форма входа
-    """
+
     N, C_in, H, W = input_shape
     Kh, Kw = kernel_size
     Hout = (H - Kh + 2 * pad) // stride + 1
@@ -45,7 +42,6 @@ def col2im(dX_col, input_shape, kernel_size, stride=1, pad=0):
         col_idx = 0
         for i in range(Hout):
             for j in range(Wout):
-                # dX_col[n, :, col_idx] — плоский патч (C_in*Kh*Kw,)
                 patch_grad = dX_col[n, :, col_idx].reshape(C_in, Kh, Kw)
                 dX[n, :, i * stride:i * stride + Kh, j * stride:j * stride + Kw] += patch_grad
                 col_idx += 1
@@ -70,48 +66,40 @@ class Conv2D:
         self.db = np.zeros_like(self.b)
 
     def forward(self, x):
-        self.cache_shape = x.shape  # (N, C_in, H, W)
+        self.cache_shape = x.shape
         col, Hout, Wout = im2col(x, self.kernel_size, self.stride, self.padding)
         self.cache_col = col.copy()
-        self.cache_hout, self.cache_wout = Hout, Wout  # ← сохранили!
+        self.cache_hout, self.cache_wout = Hout, Wout
 
         N = x.shape[0]
-        W_flat = self.W.reshape(self.out_channels, -1)  # (out_ch, in_ch*Kh*Kw)
+        W_flat = self.W.reshape(self.out_channels, -1)
 
-        # (N, out_ch, Hout*Wout)
         out = np.einsum('oc,ncm->nom', W_flat, col)
 
         if self.bias:
             out += self.b.reshape(1, self.out_channels, 1)  # broadcast
 
-        # 🔑 КЛЮЧЕВОЙ ШАГ: ресейп в 4D
         return out.reshape(N, self.out_channels, Hout, Wout)
 
     def backward(self, dout):
         N = self.cache_shape[0]
-        W_flat = self.W.reshape(self.out_channels, -1)  # (out_ch, in_ch*Kh*Kw)
+        W_flat = self.W.reshape(self.out_channels, -1)
 
-        # dout: (N, out_ch, Hout, Wout) → (N, out_ch, Hout*Wout)
-        dout_flat = dout.reshape(N, self.out_channels, -1)  # (N, out_ch, Hout*Wout)
-        col = self.cache_col  # (N, in_ch*Kh*Kw, Hout*Wout)
+        dout_flat = dout.reshape(N, self.out_channels, -1)
+        col = self.cache_col
 
-        # dW = sum_n (dout_flat[n] @ col[n].T)
-        # dout_flat[n]: (out_ch, Hout*Wout), col[n].T: (Hout*Wout, in_ch*Kh*Kw)
-        # результат: (out_ch, in_ch*Kh*Kw)
         self.dW[:] = sum(
             np.matmul(dout_flat[n], col[n].T)
             for n in range(N)
         ).reshape(self.W.shape)
 
         if self.bias:
-            self.db[:] = np.sum(dout, axis=(0, 2, 3))  # сумма по N, H, W
+            self.db[:] = np.sum(dout, axis=(0, 2, 3))
 
-        # dx: обратно через col2im
-        # Сначала: dx_col[n] = W_flat.T @ dout_flat[n]
         dx_col = np.zeros((N, self.in_channels * self.kernel_size[0] * self.kernel_size[1],
                            self.cache_hout * self.cache_wout))
         for n in range(N):
-            dx_col[n] = np.matmul(W_flat.T, dout_flat[n])  # (in_ch*Kh*Kw, Hout*Wout)
+            dx_col[n] = np.matmul(W_flat.T, dout_flat[n])
 
         dx = col2im(dx_col, self.cache_shape, self.kernel_size, self.stride, self.padding)
         return dx
